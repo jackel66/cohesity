@@ -74,6 +74,7 @@ for magneto_log_file in magneto_log_files:
     refresh_single_calls_one_hour = int(subprocess.check_output(refresh_single_calls_one_hour_cmd, shell=True))
     refresh_batch_calls_one_hour = int(subprocess.check_output(refresh_batch_calls_one_hour_cmd, shell=True))
     magneto_throttled_calls_one_hour = int(subprocess.check_output(magneto_throttled_calls_one_hour_cmd, shell=True))
+ 
 
     # Perform calculations based on extracted data
     total_magneto_calls_one_hour = (
@@ -117,7 +118,6 @@ total_backup_calls = overall_total_calls - total_refresh_calls
 
 # Print the final metrics to be written to log file
 final_metrics = [
-    "Final Metrics:",
     f"Timestamp:            {current_date.strftime('%m-%d-%Y %H:%M:%S')}",
     f"Total calls:          {overall_total_calls:20}",
     f"Total refresh calls:  {total_refresh_calls:20}",
@@ -127,6 +127,7 @@ final_metrics = [
 
 # Combine log lines and final metrics
 log_output.extend(final_metrics)
+#log_output.append(' '.join(final_metrics))
 
 # Write the log to a file
 log_file_path = "/home/support/utils/apicalls.out"
@@ -136,4 +137,3 @@ with open(log_file_path, "a") as log_file:
     log_file.write("\n")
 
 # Print the final metrics to the console
-#print("\n".join(final_metrics))

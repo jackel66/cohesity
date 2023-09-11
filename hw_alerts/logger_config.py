@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 #
-#
+# Authort: Doug Austin
+# Date: 8/23/2023
+
 import logging
 
 # Log File location and basic logging inforamtion

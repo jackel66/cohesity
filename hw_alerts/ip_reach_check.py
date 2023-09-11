@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 #
-#
+# Authort: Doug Austin
+# Date: 8/23/2023
+
 import logger_config
 import subprocess
+import send_syslog
 
 def check_reachability(ip):
     try:
@@ -29,7 +32,8 @@ def main():
                 if interface.startswith("br0") and ip.startswith("10") and interface not in interfaces:
                     interfaces.add(interface)
                     ips.append((interface, ip))
-
+                    
+    # Loop through ips and check for reachability.. alert when something is not reachable
     for interface, ip in ips:
         if check_reachability(ip):
             logger_config.logging.info(f"IP {ip} is reachable on Interface: {interface}")
@@ -37,13 +41,14 @@ def main():
             logger_config.logging.error(f"IP {ip} is not reachable on Interface {interface}")
             from send_syslog import send_syslog_message, syslog_host, syslog_port
             failed_ip_text = f'"IP {ip} is not reachable on Interface {(interface)}"'
+            cluster_name = f'"{(send_syslog.value)}"'
             attributes = {
-                "AlertCode": '"CH0000004"',
-                "AlertName": '"IP is not Reachable"',
-                "AlertSeverity": '"CRITICAL"',
-                "AlertDescription": failed_ip_text,
-                "AlertCause": '"There is an IP that is not reachable, check the node and ensure connectivity"',
-                "HostName": socket.gethostname()
+                '"ClusterName"': cluster_name,
+                '"AlertCode"': '"CH00000004"',
+                '"AlertName"': '"IPNotReachable"',
+                '"AlertSeverity"': '"CRITICAL"',
+                '"AlertDescription"': failed_ip_text,
+                '"AlertCause"': '"There is an IP that is not reachable, check the node and ensure connectivity"',
             }    
             send_syslog_message(syslog_host, syslog_port, attributes)
             

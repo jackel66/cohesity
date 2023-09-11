@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 #
-#
+# Authort: Doug Austin
+# Date: 8/23/2023
+
 import subprocess
 import socket
 import logger_config
-
+import send_syslog
 
 # Run lsblk command and capture the output
 lsblk_output = subprocess.check_output(['lsblk', '-o', 'KNAME,TYPE,SIZE,MODEL']).decode()
@@ -45,13 +47,14 @@ failed_disks = [disk for disk, assessment in disk_assessments.items() if assessm
 if len(failed_disks) > 0:
     from send_syslog import send_syslog_message, syslog_host, syslog_port
     failed_disks_text = f'"Disks that Failed Self-Test: {", ".join(failed_disks)}"'
+    cluster_name = f'"{(send_syslog.value)}"'
     attributes = {
-            "AlertCode": '"CH0000001"',
-            "AlertName": '"Disk SMART Test Failed"',
-            "AlertSeverity": '"CRITICAL"',
-            "AlertDescription": failed_disks_text,
-            "AlertCause": '"SMART Tests have failed on one or more disks."',
-            "HostName": socket.gethostname()
+        '"ClusterName"': cluster_name,
+        '"AlertCode"': '"CH00000001"',
+        '"AlertName"': '"SMARTTestsFailed"',
+        '"AlertSeverity"': '"CRITICAL"',
+        '"AlertDescription"': failed_disks_text,
+        '"AlertCause"': '"SMART Tests have failed on one or more disks."'
     }    
     send_syslog_message(syslog_host, syslog_port, attributes)
 

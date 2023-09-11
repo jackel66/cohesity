@@ -4,9 +4,12 @@
 # Updated: 6/1/2023
 #
 
+# Define Partition Types to Check
 partitions=$(df -h | awk 'NR>1{print $6}' | grep -v -E 'tmpfs|devtmpfs|/boot|/home_cohesity_data|/home/cohesity')
 cohesity_partitions=$(df -h | awk 'NR>1{print $6}' | grep '^/home_cohesity')
-# Header for log
+
+
+# Formatting for Output of OS Partitions
 echo ""
 printf "%-15s  %85s\n" "Partition" "Used Percetnage"
 echo "------------------------------------------------------------------------------------------------------------"
@@ -19,6 +22,8 @@ for partition in $partitions; do
         printf "%-85s | \033[032m%3s%%\033[0m\n" "$partition" "$usage"
     fi
 done
+
+# Formatting for Output of Cohesity Partitions
 echo ""
 echo "------------------------------------------------------------------------------------------------------------"
 echo ""

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 #
-#
+# Authort: Doug Austin
+# Date: 8/23/2023
+
+
 import os
 import socket
 import logger_config
-
+import send_syslog
 
 def get_interfaces_with_ip():
     interfaces = []
@@ -42,12 +45,13 @@ for interface in interfaces:
         logger_config.logger.error(f"Interface: {interface}, State: {state}")
         from send_syslog import send_syslog_message, syslog_host, syslog_port
         failed_nic_text = f'"Interface down: {(interface)}"'
+        cluster_name = f'"{(send_syslog.value)}"'
         attributes = {
-            "AlertCode": '"CH0000002"',
-            "AlertName": '"Network Interface Down"',
-            "AlertSeverity": '"WARNING"',
-            "AlertDescription": failed_nic_text,
-            "AlertCause": '"Network Interface is Down."',
-            "HostName": socket.gethostname()
+            '"ClusterName"': cluster_name,
+            '"AlertCode"': '"CH00000002"',
+            '"AlertName"': '"NetworkInterfaceDown"',
+            '"AlertSeverity"': '"WARNING"',
+            '"AlertDescription"': failed_nic_text,
+            '"AlertCause"': '"Network Interface is Down."',
         }    
         send_syslog_message(syslog_host, syslog_port, attributes)
