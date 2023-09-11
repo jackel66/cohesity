@@ -27,7 +27,7 @@ calc_percent = (percentage / Threashold) * 100
 
 def main():
     # Execute the magneto_mem_check.sh script using subprocess
-    result = subprocess.run(['/home/support/alerts/magneto_mem_check.sh'], stdout=subprocess.PIPE, shell=True)
+    result = subprocess.run(['/home/support/alerts/magneto_mem_check.py'], stdout=subprocess.PIPE, shell=True)
     output_lines = result.stdout.decode('utf-8').split('\n')
     
     # Remove any empty lines from the output_lines list
