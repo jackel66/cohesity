@@ -10,8 +10,8 @@ import socket
 import logger_config
 
 # Syslog Server and Port information
-syslog_host = 'syslogvip.capgroup.com'
-syslog_port = 514
+syslog_host = 'syslogvip.capgroup.com'  # <<< Change to syslog server name
+syslog_port = 514                       # <<< Change to syslog server port
 
 # Get Cluster name from alerting system
 hostname = socket.gethostname()
