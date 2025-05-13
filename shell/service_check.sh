@@ -41,3 +41,5 @@ for service in "${sorted_services[@]}"; do
     version="${versions[$service]}"
     printf "%-30s %s\n" "$service:" "$version"
 done
+
+#test end
