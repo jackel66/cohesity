@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Author: Doug Austin
+# Date: 08/05/2023
+# Summary: This script pulls file system information, Service PIDs, Service Versions, Hardware Firmware versions, Fatal Log Entries
+# to be given to cohesity support. 
 
 import subprocess
 import socket
@@ -6,6 +10,10 @@ import fcntl
 import struct
 import os
 import shutil
+import sys
+#custom functions
+sys.path.append('/home/support/utils/functions/')
+from my_functions import get_node_uptime, fetch_cluster_info
 
 # ANSI escape sequences for red color and bold text
 RED_BACKGROUND = '\033[41m'
@@ -14,27 +22,25 @@ BOLD = '\033[1m'
 RESET = '\033[0m'
 
 # Check OS Information
+print(f"------------- {RED_BACKGROUND} Node Uptime {RESET} ---------------")
+get_node_uptime()
+print("")
 
-uptime = "uptime | grep days | awk  -F ',' '{print $1}'"                                                     
-output = os.popen(uptime).read().strip()
-dateo = os.popen('date').read().strip()
-print(f"Current Date: {dateo}")
-print(f"Server Uptime: {output}")
 
+print(f"------------- {RED_BACKGROUND} FileSystem Check {RESET} ---------------")
 subprocess.call(["sh","/home/support/utils/fs_check.sh"])
 print("")
 
+
+print(f"------------- {RED_BACKGROUND} Process Check {RESET} ---------------")
 # Processes to check
 processes = ['aegis', 'alerts', 'apollo', 'athena', 'atom', 'bifrost', 'bifrost_broker', 'bridge', 'bridge_proxy', 'compass', 'eagle_agent', 'elrond', 'etl_server', 'gandalf', 'groot', 'heimdall', 'icebox', 'iris', 'iris_proxy', 'janus', 'keychain', 'librarian', 'logwatcher', 'magneto', 'newscribe', 'nexus', 'nexus_proxy', 'nfs_proxy', 'node_exporter', 'patch', 'pushclient', 'rtclient', 'smb2_proxy', 'smb_proxy', 'spire_agent', 'spire_server', 'stats', 'statscollector', 'storage_proxy', 'throttler', 'vault_proxy', 'yoda']
-
 # Unicode Marks
 CHECKMARK = "\N{check mark}"
 CROSSMARK = "\N{cross mark}"
 
 # Header for Output
 print('{:<15s}  {:<10s}  {:<10s}  {:<5s}'.format('Process', 'State', 'Status', 'PID'))
-print('----------------------------------------------------------------')
-
 # Main section of Code to check for a running Process
 for process in processes:
     try:
@@ -50,32 +56,33 @@ for process in processes:
         print(f"{process}{' ' * (15 - len(process))} Not Found         {CROSSMARK}")
 
 print("")
-print("-------------------------------")
 
-print("")
+print(f"------------- {RED_BACKGROUND} Firmware Check {RESET} ---------------")
 # Product Helper Section
 chassis_fw_cmd = f"product_helper  -op=LIST_FIRMWARE_VERSION"
 
 COFW = (subprocess.check_output(chassis_fw_cmd, shell=True).decode().strip())
 
 print(f"Firmware: {COFW}\n")
-
 print("")
-print("-------------------------------")
+
+
+# Get Cluster Information
+print(f"------------- {RED_BACKGROUND} Cluster Info {RESET} ---------------")
+fetch_cluster_info()
 
 # Product Helper Section
-print("Node Information")
-print("-------------------------------")
+print(f"------------- {RED_BACKGROUND} Node Information {RESET} ---------------")
 cohesity_node_cmd = f"product_helper --op=GET_PRODUCT_BRIEF"
 CHSERIAL = (subprocess.check_output(cohesity_node_cmd, shell=True).decode().strip())
 
 print(f"{CHSERIAL}")
 print ("")
 
-print("Node IP Configs")
-print("-------------------")
+
+print(f"------------- {RED_BACKGROUND} Node Ip Info {RESET} ---------------")
 print('{:<15s}  {:<13s}  {:<25s}'.format('Interface', 'State', 'IPs'))
-print("---------------------------------------------------------------------------")
+
 # Get Interface information
 output = subprocess.check_output(['ip', '-4', '-brief', 'address', 'show'])
 output = output.decode('utf-8')  # Convert bytes to string
@@ -100,10 +107,25 @@ for interface, ip_address in result:
 # Adding Space between checks
 print("")
 
+# Get Software upgrade history
+
+print(f"------------- {RED_BACKGROUND} Software Version History {RESET} ---------------")
+try:
+    subprocess.call(['cat', "/home/cohesity/data/nexus/software_version_history.json"])
+except FileNotFoundError:
+    print("File Not found.")
+
+# Adding Space between checks
+print("") 
+print(f"------------- {RED_BACKGROUND} Service Version Check {RESET} ---------------")
 # Get Services Versions
-subprocess.call(["sh","/home/support/utils/service_check.sh"])
+try:
+    subprocess.call(["sh","/home/support/utils/service_check.sh"])
+except FileNotFoundError:
+    print("File not Found.")
 
 print("")
+print(f"------------- {RED_BACKGROUND} Latest Fatals On Node {RESET} ---------------")
 # Get Log FATALs
 print("")
 print(f"========={RED_BACKGROUND}Bridge FATAL Log{RESET}=========")
@@ -115,16 +137,16 @@ print("")
 print(f"========={RED_BACKGROUND}Magneto FATAL Log{RESET}=========")
 os.system("cat /home/cohesity/logs/magneto_exec.*FATAL | head")
 print("")
-print(f"========={RED_BACKGROUND}Yoda FATAL Log{RESET}=========")
+print(f"========={RED_BACKGROUND} Yoda FATAL Log {RESET}=========")
 os.system("cat /home/cohesity/logs/yoda_exec.*FATAL | head")
 print("")
-print(f"========={RED_BACKGROUND}Apollo FATAL Log{RESET}=========")
+print(f"========={RED_BACKGROUND} Apollo FATAL Log {RESET}=========")
 os.system("cat /home/cohesity/logs/apollo_exec.*FATAL | head")
 print("")
-print(f"========={RED_BACKGROUND}Groot FATAL Log{RESET}=========")
+print(f"========={RED_BACKGROUND} Groot FATAL Log {RESET}=========")
 os.system("cat /home/cohesity/logs/groot_exec.*FATAL | head")
 print("")
-print(f"========={RED_BACKGROUND}Nexus FATAL Log{RESET}=========")
+print(f"========={RED_BACKGROUND} Nexus FATAL Log {RESET}=========")
 os.system("cat /home/cohesity/logs/nexus_exec.*FATAL | head")
 print("")
 print(f"========={RED_BACKGROUND}Nexus Proxy FATAL Log{RESET}=========")

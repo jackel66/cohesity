@@ -47,7 +47,7 @@ def main():
             except ValueError:
                 log_level = sys.argv[3]
         else:
-            log_level = sys.argv [3]
+            log_level = sys.argv[3]
 
     log_file = os.path.join(LOGS_DIRECTORY, f"{service_name}_exec.{log_level}")
 
