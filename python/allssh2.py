@@ -3,12 +3,15 @@
 # Author: Doug Austin
 # Date: 6/20/23
 # New version of Allssh.py that can be used with python
+# More Efficient than allssh.sh and provides clearer responses from other nodes
+# Verified with Cohesity 7.1.2 U3
 
-
+# Required Libraries
 import argparse
 import subprocess
 import sys
 
+# Execution of Cmds 
 def execute_command(ip, command):
     red_bg = "\033[41m"
     reset_color = "\033[0m"
@@ -22,7 +25,7 @@ def execute_command(ip, command):
         print(e.output.decode().strip())
         
 
-
+# Run through all Nodes for Execution
 def main():
     parser = argparse.ArgumentParser(description='SSH script to execute command on a remote host')
     parser.add_argument('command', type=str, help='Command to execute on remote host in quotes EX. allssh2.py "df -hl"')

@@ -1,0 +1,39 @@
+﻿serviceName,reason,flagValue,flagName
+alerts,Case00853868,"90,470,111,308,019",alerts_master_suppress_alert_types
+alerts,00696472,"11,130,904,708,019",alerts_master_suppress_alert_types
+alerts,00696472,"11,130,904,708,019",alerts_master_suppress_alert_types
+apollo,Auto set by Cohesity. Don't update manually.,FALSE,apollo_block_v1_actions
+apollo,Auto set by Cohesity. Don't update manually.,660000,apollo_mr_slave_io_capacity_ppm
+bridge,Auto set by Cohesity. Don't update manually.,660000,bridge_apollo_action_executor_rate_ppm
+icebox,Auto set by Cohesity. Don't update manually.,660000,bridge_apollo_action_executor_rate_ppm
+bridge,02230311,0,bridge_ddw_portal_insecure_connection_alert_interval_msecs
+bridge_proxy,00614433,1200,bridge_magneto_vmware_vix_timeout_secs
+bridge_proxy,00614433,900,bridge_proxy_hung_op_timeout_secs
+bridge,KB2162,TRUE,bridge_smb_portal_require_signing
+nexus,Enable DNS ping based alert,TRUE,check_dns_via_ping
+nexus,Suppress DNS alert,FALSE,dns_reachability_monitor_enable
+nexus,Secured Shell false by iris_cli trigger,FALSE,enable_secure_shell
+eagle_agent,fi-35898,5,helios_agent_num_stats_entities
+iris,Default from Engineering,TRUE,iris_api_throttling
+iris,Default from Engineering,FALSE,iris_enable_session_management
+iris,Default from Engineering,FALSE,iris_skip_local_user_password_change
+iris,Enable Teams,"office365TeamsSupportEnabled=true,office365TeamsRecoveryShowNewLocation=true",iris_ui_flags
+iris,Disabled for CG,FALSE,mfa_enabled_for_AD_users
+iris,MaybeEnableGuardrail: Force enabling guardrail via code as MT is disabled,TRUE,multitenancy_guardrail_enabled
+magneto,SQL VDI,FALSE,magneto_add_workload_stats_for_older_views
+magneto,FI-39621,TRUE,magneto_app_entity_set_include_instance
+magneto,Auto set by Cohesity. Don't update manually.,TRUE,magneto_checkpoint_change_ids_for_pubsub
+magneto,Auto set by Cohesity. Don't update manually.,FALSE,magneto_cleanup_pre_archival_views
+magneto,Auto set by Cohesity. Don't update manually.,FALSE,magneto_enable_auth_for_unsecure_backup_views
+magneto,Auto set by Cohesity. Don't update manually.,FALSE,magneto_enable_non_cloud_proxy_gk_permits_migration
+magneto,SQL_VDI,TRUE,magneto_force_sql_backup_log_using_native_op
+magneto,multi-cluster-registration,TRUE,magneto_master_allow_windows_multiple_cohesity_clusters
+magneto,KB000007308,FALSE,magneto_sql_aag_report_error_if_no_replica_found
+magneto,SQL_VDI,TRUE,magneto_sql_backup_log_using_native_op
+magneto,01601528,TRUE,magneto_sql_use_fqdn_for_smb_native_backup
+magneto,sql_vdi,TRUE,magneto_sql_use_smb_for_native_backups
+stats,FI-33296,6044,memory_usage_checker_additional_allowance_MB
+newscribe,Auto-tuned by Apollo,1,scribe_admctl_low_weight_thresholds_multiplier
+newscribe,Auto set by Cohesity. Don't update manually.,660000,scribe_bucket_scan_rate_ppm
+nexus,Secure Shell Timeout,300,secure_shell_disabled_duration_hours
+yoda,KB-000004082,"ext2,ext3,ext4,ntfs,xfs",yoda_indexable_fs
