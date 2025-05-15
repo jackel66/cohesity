@@ -1,5 +1,5 @@
 # Load Cohesity API Helper
-# cohesity-api.ps1 must be in the same folder as this script
+# cohesity-api.ps1 must be in the same folder as this script (https://github.com/bseltz-cohesity/scripts/blob/master/powershell/cohesity-api/cohesity-api.ps1)
 . .\cohesity-api.ps1
 
 # Auth to Source Cluster
