@@ -25,7 +25,7 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$username,
 
-    [string]$domain = 'cguser.capgroup.com'
+    [string]$domain = 'domain'
 )
 
 # --- Cohesity API Connect Script (must be in same folder as this script) ---

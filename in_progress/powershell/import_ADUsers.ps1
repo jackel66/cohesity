@@ -4,7 +4,7 @@
 
 
 # Auth to destination cluster
-$vip = 'asx1cdp1dcl-az'
+$vip = 'cluster'
 $username = 'admin'
 $domain = 'LOCAL'
 apiauth -vip $vip -username $username -domain $domain

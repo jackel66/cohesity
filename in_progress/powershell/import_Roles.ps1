@@ -4,7 +4,7 @@
 
 # ==Config==
 
-$vip = 'asx1cdp1dcl-az' 
+$vip = 'cluster' 
 $username = 'admin' # user with api access
 $domain = 'local' # domain of user account
 # Script will prompt for password

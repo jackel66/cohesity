@@ -28,9 +28,9 @@ Changelog:
 . "$PSScriptRoot\cohesity-api.ps1"
 
 # === Parameters ===
-$vip = "asx1cdr1gcl-az"  # cohesity-cluster.domain.com
-$username = "condoua2a"
-$domain = "cguser.capgroup.com"
+$vip = "cluster"  # cohesity-cluster.domain.com
+$username = "admin"
+$domain = "domain"
 
 # Authenticate
 apiauth -vip $vip -username $username -domain $domain
