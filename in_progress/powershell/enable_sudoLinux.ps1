@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-Exports Cohesity user and group accounts (non-LOCAL) from a cluster.
+Enables sudo access for the linuxSupport user on a Cohesity cluster.
 
 .DESCRIPTION
-Connects to a Cohesity cluster and exports all AD/SSO users and groups (excluding LOCAL) into a JSON file.
+Connects to a Cohesity cluster and enables sudo access for the linuxSupport user.
 
 .PARAMETER vip
-The FQDN or IP address of the Cohesity cluster.
+The VIP or FQDN of the Cohesity cluster
 
 .PARAMETER user
 The username for Cohesity authentication.
@@ -19,10 +19,10 @@ The domain of the user account (e.g., LOCAL or AD domain).
 
 .NOTES
 Author: Doug Austin  
-Date: 05/12/2025  
+Date: 05/120/2025  
 Changelog:
-  - Initial version for exporting accounts
-  - Refactored for dynamic input and help
+  - Initial version for enabling sudo access
+
 #>
 # Load Cohesity API Helper
 . "$PSScriptRoot\cohesity-api.ps1"
