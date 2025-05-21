@@ -1,37 +1,59 @@
 ﻿<#
 .SYNOPSIS
-Syncs custom Cohesity roles, Active Directory groups, and AD/allowed local users between two clusters.
+Syncs custom Cohesity roles, AD users, and groups between clusters.
+
+.DESCRIPTION
+Compares and optionally syncs Cohesity roles, AD users, and groups from a source cluster to one or more target clusters.
 
 .PARAMETER sourceVip
-Cohesity VIP or FQDN of the source cluster.
+FQDN or IP of the source Cohesity cluster.
 
-.PARAMETER targetVip
-Cohesity VIP or FQDN of the target cluster.
+.PARAMETER targetVips
+One or more target Cohesity VIPs. Can be passed via parameter or via targetvips.txt.
 
 .PARAMETER username
-API username with permission to read/write users, groups, and roles.
+Username with API access.
 
 .PARAMETER domain
-AD domain or 'LOCAL'. Default: domain.com
+Domain of the username (e.g., cguser.capgroup.com or LOCAL). Defaults to cguser.capgroup.com.
+
+.PARAMETER forceSync
+Skips prompts and forces sync of all mismatched users/roles.
 
 .EXAMPLE
-.\sync-cohesity-users.ps1 -sourceVip cluster1 -targetVip cluster2 -username admin -domain domain.com
+.\sync-cohesity.ps1 -sourceVip cluster0 -targetVips cluster1,cluster2 -username user -domain domain.com
+
+.EXAMPLE
+.\sync-cohesity.ps1 -sourceVip cluster0 -username user
+(Reads targetVips from targetvips.txt)
+
+.NOTES
+Author: Doug Austin  
+Date: 2025-05-20
+
+If using a targetVips file, it must be in the same folder as this script.
 #>
 
 param (
-    [Parameter(Mandatory = $true)]
     [string]$sourceVip,
-
-    [Parameter(Mandatory = $true)]
-    [string]$targetVip,
-
-    [Parameter(Mandatory = $true)]
+    [string[]]$targetVips,
     [string]$username,
-
     [string]$domain = 'domain.com'
 )
 
-# Constants
+# --- If no -targetVips parameter is passed, try to read from 'targetvips.txt' ---
+if (-not $targetVips) {
+    $filePath = "$PSScriptRoot\targetvips.txt"
+    if (Test-Path $filePath) {
+        $targetVips = Get-Content $filePath | Where-Object { $_ -and $_.Trim() -ne "" }
+        Write-Host "✅ Loaded $($targetVips.Count) targets from targetvips.txt" -ForegroundColor Cyan
+    } else {
+        Write-Host "❌ No targetVips provided and targetvips.txt not found." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# --- Constants ---
 $localDomain = "LOCAL"
 $allowedLocalUser = "adminp2"
 
@@ -58,11 +80,13 @@ $sourceGroups = api get /public/groups | Where-Object { $_.domain -ne $localDoma
 $sourceRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
 
 # --- Connect to Target ---
-Write-Host "`nConnecting to target cluster: $targetVip" -ForegroundColor Cyan
-apiauth -vip $targetVip -username $username -domain $domain
-$targetUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
-$targetGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
-$targetRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
+foreach ($targetVip in $targetVips) {
+    Write-Host "`nConnecting to target cluster: $targetVip" -ForegroundColor Cyan
+    apiauth -vip $targetVip -username $username -domain $domain
+    $targetUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
+    $targetGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
+    $targetRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
+}
 
 # --- Build Lookup Tables for Fast Comparison ---
 $targetUserTable = @{}
@@ -92,11 +116,11 @@ foreach ($role in $sourceRoles) {
     $match = $targetRoleTable[$roleKey]
 
     if (-not $match) {
-        Write-Host "⚠️  Missing role in target: $($role.name)" -ForegroundColor Yellow
+        Write-Host "Missing role in target: $($role.name)" -ForegroundColor Yellow
         $missingRoles += $role
     }
     elseif ($role.PrivString -ne $match.PrivString) {
-        Write-Host "🔄 Role privilege mismatch: $($role.name)" -ForegroundColor Cyan
+        Write-Host "Role privilege mismatch: $($role.name)" -ForegroundColor Cyan
         $roleDiffs += $role
     }
 }
@@ -111,14 +135,14 @@ foreach ($user in $sourceUsers) {
     $match = $targetUserTable[$userKey]
 
     if (-not $match) {
-        Write-Host "⚠️  Missing user in target: $userKey" -ForegroundColor Yellow
+        Write-Host "Missing user in target: $userKey" -ForegroundColor Yellow
         $missingUsers += $user
     }
     else {
         $sourceRolesStr = (@($user.roles | Sort-Object -Unique) -join ',')
         $targetRolesStr = (@($match.roles | Sort-Object -Unique) -join ',')
         if ($sourceRolesStr -ne $targetRolesStr) {
-            Write-Host "🔄 Role mismatch for user: $userKey" -ForegroundColor Cyan
+            Write-Host "Role mismatch for user: $userKey" -ForegroundColor Cyan
             $roleMismatchedUsers += $user
         }
     }
@@ -141,14 +165,14 @@ foreach ($group in $sourceGroups) {
 $hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0 -or $missingGroups.Count -gt 0
 
 if (-not $hasDifferences) {
-    Write-Host "`n✅ Source and target clusters are already in sync. No updates needed." -ForegroundColor Green
+    Write-Host "Source and target clusters are already in sync. No updates needed." -ForegroundColor Green
     exit 0
 }
 
-Write-Host "`n⚠️  Differences detected. Would you like to synchronize these to the target cluster?"
+Write-Host "Differences detected. Would you like to synchronize these to the target cluster?"
 $syncConfirm = Read-Host "Type 'Y' to proceed or anything else to cancel"
 if ($syncConfirm -ne 'Y') {
-    Write-Host "❌ Synchronization cancelled by user."
+    Write-Host "Synchronization cancelled by user."
     exit 0
 }
 
@@ -164,9 +188,9 @@ function Sync-Role($role, $isNew) {
         $method = if ($isNew) { 'post' } else { 'put' }
         $uri = if ($method -eq 'post') { '/public/roles' } else { "/public/roles/$($role.name)" }
         api $method $uri $body
-        Write-Host "✅ Synchronized role: $($role.name)" -ForegroundColor Green
+        Write-Host "Synchronized role: $($role.name)" -ForegroundColor Green
     } catch {
-        Write-Host "❌ Failed to sync role: $($role.name)" -ForegroundColor Red
+        Write-Host "Failed to sync role: $($role.name)" -ForegroundColor Red
         Write-Host $_.Exception.Message
     }
 }
@@ -174,7 +198,7 @@ function Sync-Role($role, $isNew) {
 function Sync-User($user) {
     $userKey = "$($user.domain)\$($user.username)"
     if ($user.domain -eq $localDomain -and $user.username -ne $allowedLocalUser) {
-        Write-Host "⏭️  Skipping unapproved LOCAL user: $userKey" -ForegroundColor Yellow
+        Write-Host "Skipping unapproved LOCAL user: $userKey" -ForegroundColor Yellow
         return
     }
     $body = @{
@@ -188,9 +212,9 @@ function Sync-User($user) {
     }
     try {
         api post /public/users $body
-        Write-Host "✅ Synced user: $userKey" -ForegroundColor DarkGreen -BackgroundColor Green
+        Write-Host "Synced user: $userKey" -ForegroundColor DarkGreen -BackgroundColor Green
     } catch {
-        Write-Host "❌ Failed to sync user: $userKey" -ForegroundColor Red
+        Write-Host "Failed to sync user: $userKey" -ForegroundColor Red
         Write-Host $_.Exception.Message
     }
 }
@@ -204,9 +228,9 @@ function Sync-Group($group) {
     }
     try {
         api post /public/groups $body
-        Write-Host "✅ Synced group: $groupKey" -ForegroundColor Green
+        Write-Host "Synced group: $groupKey" -ForegroundColor Green
     } catch {
-        Write-Host "❌ Failed to sync group: $groupKey" -ForegroundColor Red
+        Write-Host "Failed to sync group: $groupKey" -ForegroundColor Red
         Write-Host $_.Exception.Message
     }
 }
@@ -232,4 +256,4 @@ foreach ($group in $missingGroups) {
     Sync-Group $group
 }
 
-Write-Host "`n✅ Synchronization complete." -ForegroundColor Green
+Write-Host "Synchronization complete." -ForegroundColor DarkGreen -BackgroundColor Green
