@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-Syncs custom Cohesity roles and AD/allowed local users between two clusters.
+Syncs custom Cohesity roles, Active Directory groups, and AD/allowed local users between two clusters.
 
 .PARAMETER sourceVip
 Cohesity VIP or FQDN of the source cluster.
@@ -9,10 +9,13 @@ Cohesity VIP or FQDN of the source cluster.
 Cohesity VIP or FQDN of the target cluster.
 
 .PARAMETER username
-API username with permission to read/write users and roles.
+API username with permission to read/write users, groups, and roles.
 
 .PARAMETER domain
-AD domain or 'LOCAL'. Default: cguser.capgroup.com
+AD domain or 'LOCAL'. Default: domain.com
+
+.EXAMPLE
+.\sync-cohesity-users.ps1 -sourceVip cluster1 -targetVip cluster2 -username admin -domain domain.com
 #>
 
 param (
@@ -25,171 +28,208 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$username,
 
-    [string]$domain = 'domain'
+    [string]$domain = 'domain.com'
 )
 
-# --- Cohesity API Connect Script (must be in same folder as this script) ---
+# Constants
+$localDomain = "LOCAL"
+$allowedLocalUser = "adminp2"
+
+# --- Load API Helper ---
 . "$PSScriptRoot\cohesity-api.ps1"
 
-# --- Connect to Source Cluster ---
-Write-Host "Connecting to source cluster: $sourceVip" -ForegroundColor Cyan
+function Build-UserKey($user) {
+    return "$($user.domain.ToLower())\$($user.username.ToLower())"
+}
+
+function Build-GroupKey($group) {
+    return "$($group.domain.ToLower())\$($group.name.ToLower())"
+}
+
+function Build-RoleKey($role) {
+    return $role.name
+}
+
+# --- Connect to Source ---
+Write-Host "`nConnecting to source cluster: $sourceVip" -ForegroundColor Cyan
 apiauth -vip $sourceVip -username $username -domain $domain
-$sourceUsers = api get /public/users | Where-Object { $_.domain -ne "LOCAL" -or $_.username -eq $allowedLocalUser}
+$sourceUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
+$sourceGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
 $sourceRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
 
-
-# --- Connect to Target Cluster ---
-Write-Host "Connecting to target cluster: $targetVip" -ForegroundColor Cyan
+# --- Connect to Target ---
+Write-Host "`nConnecting to target cluster: $targetVip" -ForegroundColor Cyan
 apiauth -vip $targetVip -username $username -domain $domain
-$targetUsers = api get /public/users | Where-Object { $_.domain -ne "LOCAL"  -or $_.username -eq $allowedLocalUser}
+$targetUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
+$targetGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
 $targetRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
 
-# --- Compare Roles --- 
+# --- Build Lookup Tables for Fast Comparison ---
+$targetUserTable = @{}
+foreach ($u in $targetUsers) { $targetUserTable[(Build-UserKey $u)] = $u }
+
+$targetGroupTable = @{}
+foreach ($g in $targetGroups) { $targetGroupTable[(Build-GroupKey $g)] = $g }
+
+$targetRoleTable = @{}
+foreach ($r in $targetRoles) { $targetRoleTable[(Build-RoleKey $r)] = $r }
+
+# Precompute sorted/joined privilege strings for roles
+foreach ($role in $sourceRoles) {
+    $role | Add-Member -MemberType NoteProperty -Name PrivString -Value ((@($role.privileges | Sort-Object -Unique) -join ','))
+}
+foreach ($role in $targetRoles) {
+    $role | Add-Member -MemberType NoteProperty -Name PrivString -Value ((@($role.privileges | Sort-Object -Unique) -join ','))
+}
+
+# --- Compare Roles ---
 $missingRoles = @()
 $roleDiffs = @()
 
-Write-Host "Comparing custom roles..." -ForegroundColor Green
+Write-Host "`nComparing custom roles..." -ForegroundColor Green
 foreach ($role in $sourceRoles) {
-    $match = $targetRoles | Where-Object { $_.name -eq $role.name }
+    $roleKey = Build-RoleKey $role
+    $match = $targetRoleTable[$roleKey]
 
     if (-not $match) {
-        Write-Host "Missing role in target: $($role.name)" -ForegroundColor Yellow
+        Write-Host "⚠️  Missing role in target: $($role.name)" -ForegroundColor Yellow
         $missingRoles += $role
     }
-    else {
-        $sourcePrivs = @($role.privileges | Sort-Object -Unique | ForEach-Object { $_.ToString() })
-        $targetPrivs = @($match.privileges | Sort-Object -Unique | ForEach-Object { $_.ToString() })
-
-        # --- Only log and add to diff if the actual sets differ ---
-        if (-not ($sourcePrivs -join ',' -eq $targetPrivs -join ',')) {
-            Write-Host "Role privilege mismatch: $($role.name)" -ForegroundColor Cyan
-            Write-Host "Source privileges: $($sourcePrivs -join ', ')" -ForegroundColor DarkGray
-            Write-Host "Target privileges: $($targetPrivs -join ', ')" -ForegroundColor DarkGray
-
-            $diff = Compare-Object -ReferenceObject $sourcePrivs -DifferenceObject $targetPrivs
-            if ($diff) {
-                Write-Host "Detailed differences:" -ForegroundColor Yellow
-                $diff | ForEach-Object {
-                    $side = if ($_.SideIndicator -eq '=>') { 'Target only' } else { 'Source only' }
-                    Write-Host "    $($side): $($_.InputObject)"
-                }
-            }
-
-            $roleDiffs += $role
-        }
+    elseif ($role.PrivString -ne $match.PrivString) {
+        Write-Host "🔄 Role privilege mismatch: $($role.name)" -ForegroundColor Cyan
+        $roleDiffs += $role
     }
 }
-
 
 # --- Compare Users ---
 $missingUsers = @()
 $roleMismatchedUsers = @()
-Write-Host "Comparing users..." -ForegroundColor Green
+
+Write-Host "`nComparing users..." -ForegroundColor Green
 foreach ($user in $sourceUsers) {
-    $match = $targetUsers | Where-Object {
-        $_.username.ToLower() -eq $user.username.ToLower() -and 
-        $_.domain.ToLower() -eq $user.domain.ToLower()
-    }
-    $key = "$($user.domain)\$($user.username)"
+    $userKey = Build-UserKey $user
+    $match = $targetUserTable[$userKey]
+
     if (-not $match) {
-        Write-Host "Missing user in target: $key" -ForegroundColor Yellow
+        Write-Host "⚠️  Missing user in target: $userKey" -ForegroundColor Yellow
         $missingUsers += $user
     }
-    elseif (($match.roles | Sort-Object) -ne ($user.roles | Sort-Object)) {
-        Write-Host "Role mismatch for user: $key" -ForegroundColor Cyan
-        Write-Host "   Source: $($user.roles -join ', ')"
-        Write-Host "   Target: $($match.roles -join ', ')"
-        $roleMismatchedUsers += $user
+    else {
+        $sourceRolesStr = (@($user.roles | Sort-Object -Unique) -join ',')
+        $targetRolesStr = (@($match.roles | Sort-Object -Unique) -join ',')
+        if ($sourceRolesStr -ne $targetRolesStr) {
+            Write-Host "🔄 Role mismatch for user: $userKey" -ForegroundColor Cyan
+            $roleMismatchedUsers += $user
+        }
+    }
+}
+
+# --- Compare Groups ---
+$missingGroups = @()
+Write-Host "`nComparing AD groups..." -ForegroundColor Green
+foreach ($group in $sourceGroups) {
+    $groupKey = Build-GroupKey $group
+    $match = $targetGroupTable[$groupKey]
+
+    if (-not $match) {
+        Write-Host "⚠️  Missing AD group in target: $groupKey" -ForegroundColor Yellow
+        $missingGroups += $group
     }
 }
 
 # --- Summary ---
-$hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0
+$hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0 -or $missingGroups.Count -gt 0
+
 if (-not $hasDifferences) {
-    Write-Host "Source and target clusters are in sync. No updates needed!!" -ForegroundColor DarkGreen -BackgroundColor Green
-    exit
+    Write-Host "`n✅ Source and target clusters are already in sync. No updates needed." -ForegroundColor Green
+    exit 0
 }
 
-# --- Prompt for Sync ---
-Write-Host "`nDifferences detected. Would you like to synchronize these to the target cluster? [Yy/Nn]"
-$syncConfirm = Read-Host "Type 'Y/y' to proceed or anything else to cancel"
+Write-Host "`n⚠️  Differences detected. Would you like to synchronize these to the target cluster?"
+$syncConfirm = Read-Host "Type 'Y' to proceed or anything else to cancel"
 if ($syncConfirm -ne 'Y') {
-    Write-Host "Synchronization cancelled by user."
-    exit
+    Write-Host "❌ Synchronization cancelled by user."
+    exit 0
 }
 
-# --- Sync Roles ---
-foreach ($role in $missingRoles) {
+function Sync-Role($role, $isNew) {
     $body = @{
-        name = $role.name
-        label = $role.label
-        description = $role.description
-        privileges = $role.privileges
-        isCustomRole = $true
+        name          = $role.name
+        label         = $role.label
+        description   = $role.description
+        privileges    = $role.privileges
+        isCustomRole  = $true
     }
-
     try {
-        api post /public/roles $body
-        Write-Host "Created role: $($role.name)" -ForegroundColor Green
+        $method = if ($isNew) { 'post' } else { 'put' }
+        $uri = if ($method -eq 'post') { '/public/roles' } else { "/public/roles/$($role.name)" }
+        api $method $uri $body
+        Write-Host "✅ Synchronized role: $($role.name)" -ForegroundColor Green
     } catch {
-        Write-Host "Failed to create role: $($role.name)"- -ForegroundColor Red
-        Write-Host $_.Exception.Message
-    }
-}
-foreach ($role in $roleDiffs) {
-
-    if (-not $role.PSObject.Properties['privileges'] -or !$role.privileges -or $role.privileges.Count -eq 0) {
-        Write-Host "Skipping update: no privileges specific for role '$($role.name)'" -ForegroundColor Yellow
-        continue
-    }
-
-    $body = @{
-        name            = $role.Name
-        label           = $role.label
-        description     = $role.description
-        privileges      = @($role.privileges | ForEach-Object { $_.ToString() })
-        isCustomRole    = $true
-    }
-
-    try {
-        api put "/public/roles/$($role.name)" $body
-        Write-Host "Updated role: $($role.name)" -ForegroundColor DarkGreen -BackgroundColor Green
-    } catch {
-        Write-Host "Failed to update role: $($role.name)" -ForegroundColor Red
+        Write-Host "❌ Failed to sync role: $($role.name)" -ForegroundColor Red
         Write-Host $_.Exception.Message
     }
 }
 
-
-# --- Sync Users ---
-$allowedLocalUser = "adminp2"
-foreach ($user in $missingUsers + $roleMismatchedUsers) {
-    $userKey = "($user.domain)\$($user.username)"
-
-    if ($user.domain -eq "LOCAL" -and $user.username -ne $allowedLocalUser)  {
-        Write-Host "Skipping Local user: $userKey"
-        continue
+function Sync-User($user) {
+    $userKey = "$($user.domain)\$($user.username)"
+    if ($user.domain -eq $localDomain -and $user.username -ne $allowedLocalUser) {
+        Write-Host "⏭️  Skipping unapproved LOCAL user: $userKey" -ForegroundColor Yellow
+        return
     }
-
     $body = @{
         username     = $user.username
         domain       = $user.domain
         roles        = $user.roles
         emailAddress = $user.emailAddress
     }
-    # --- Add password for Local user Creation ---
-    if ($user.domain -eq "LOCAL") {
-        $body["password"] = "****" # <--Temp Local User Password
+    if ($user.domain -eq $localDomain) {
+        $body["password"] = "TempSecureP@ssw0rd!"
     }
-
     try {
         api post /public/users $body
-        Write-Host "Synced user: $($user.domain)\\$($user.username)" -ForegroundColor DarkGreen -BackgroundColor Green
+        Write-Host "✅ Synced user: $userKey" -ForegroundColor DarkGreen -BackgroundColor Green
     } catch {
-        Write-Host "Failed to sync user: $userKey" -ForegroundColor Red
+        Write-Host "❌ Failed to sync user: $userKey" -ForegroundColor Red
         Write-Host $_.Exception.Message
     }
-
 }
 
-Write-Host "Synchronization complete." -ForegroundColor DarkGreen -BackgroundColor Green
+function Sync-Group($group) {
+    $groupKey = "$($group.domain)\$($group.name)"
+    $body = @{
+        name   = $group.name
+        domain = $group.domain
+        roles  = $group.roles
+    }
+    try {
+        api post /public/groups $body
+        Write-Host "✅ Synced group: $groupKey" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Failed to sync group: $groupKey" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+    }
+}
+
+# --- Sync Roles ---
+foreach ($role in $missingRoles) {
+    Sync-Role $role $true
+}
+foreach ($role in $roleDiffs) {
+    Sync-Role $role $false
+}
+
+# --- Sync Users ---
+foreach ($user in $missingUsers) {
+    Sync-User $user
+}
+foreach ($user in $roleMismatchedUsers) {
+    Sync-User $user
+}
+
+# --- Sync Groups ---
+foreach ($group in $missingGroups) {
+    Sync-Group $group
+}
+
+Write-Host "`n✅ Synchronization complete." -ForegroundColor Green
