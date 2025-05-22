@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Simple Cohesity API connector for PowerShell.
+This script is a wrapper around the Cohesity REST API for PowerShell, alone it only provides connectivity to a Cohesity cluster.
 
 .PARAMETER vip
 Cohesity cluster VIP or FQDN.
@@ -16,8 +16,14 @@ Domain for authentication (default: local).
 
 .EXAMPLE
 . .\cohesity-simple-api.ps1
-Connect-CohesityCluster -vip 10.0.0.1 -username admin -password MyPassword -domain local
-$cluster = Invoke-CohesityApi -method get -uri '/public/cluster'
+
+.USAGE
+.\cohesity-api-helper.ps1 -vip <ClusterVIP> -username <Username> -password <Password> -domain <Domain>
+
+.NOTES
+Author: Doug Austin  
+Date: 2025-05-22
+
 #>
 # Simple state
 $Global:CohesitySession = @{

@@ -46,9 +46,9 @@ if (-not $targetVips) {
     $filePath = "$PSScriptRoot\targetvips.txt"
     if (Test-Path $filePath) {
         $targetVips = Get-Content $filePath | Where-Object { $_ -and $_.Trim() -ne "" }
-        Write-Host "✅ Loaded $($targetVips.Count) targets from targetvips.txt" -ForegroundColor Cyan
+        Write-Host "Loaded $($targetVips.Count) targets from targetvips.txt" -ForegroundColor Cyan
     } else {
-        Write-Host "❌ No targetVips provided and targetvips.txt not found." -ForegroundColor Red
+        Write-Host "No targetVips provided and targetvips.txt not found." -ForegroundColor Red
         exit 1
     }
 }
@@ -58,7 +58,7 @@ $localDomain = "LOCAL"
 $allowedLocalUser = "adminp2"
 
 # --- Load API Helper ---
-. "$PSScriptRoot\cohesity-api.ps1"
+. "$PSScriptRoot\cohesity-api-helper.ps1"
 
 function Build-UserKey($user) {
     return "$($user.domain.ToLower())\$($user.username.ToLower())"
@@ -156,7 +156,7 @@ foreach ($group in $sourceGroups) {
     $match = $targetGroupTable[$groupKey]
 
     if (-not $match) {
-        Write-Host "⚠️  Missing AD group in target: $groupKey" -ForegroundColor Yellow
+        Write-Host "Missing AD group in target: $groupKey" -ForegroundColor Yellow
         $missingGroups += $group
     }
 }
