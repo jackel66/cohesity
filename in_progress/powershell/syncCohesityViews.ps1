@@ -20,6 +20,11 @@ Domain of the username (e.g., domain.com or LOCAL). Defaults to domain.com.
 .EXAMPLE
 .\syncCohesityViews.ps1 -sourceVip cluster0 -username user
 (Reads targetVips from targetvips.txt)
+
+.NOTES
+Author: Doug Austin  
+Date: 2025-05-29
+
 #>
 
 param (

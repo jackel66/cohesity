@@ -7,7 +7,7 @@ Syncs Cohesity protection policies from a source cluster to one or more target c
 FQDN or IP of the source Cohesity cluster.
 
 .PARAMETER targetVips
-One or more target Cohesity VIPs. Can be passed via parameter or via targetvips.txt.
+One or more target Cohesity VIPs. Can be passed via parameter or via targetvips_policies.txt.
 
 .PARAMETER username
 Username with API access.
@@ -17,6 +17,11 @@ Domain of the username (e.g., domain.com or LOCAL). Defaults to domain.com.
 
 .PARAMETER replicationTargetName
 Optional name of the replication target cluster to replace in snapshot replication copy policies.
+
+.NOTES
+Author: Doug Austin  
+Date: 2025-05-29
+
 #>
 
 param (
