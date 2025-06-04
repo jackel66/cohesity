@@ -200,11 +200,15 @@ foreach ($targetVip in $targetVips) {
         continue
     }
 
-    Write-Host "Differences detected for $targetVip. Would you like to synchronize these to the target cluster?"
-    $syncConfirm = Read-Host "Type 'Y' to proceed or anything else to cancel"
-    if ($syncConfirm -ne 'Y') {
-        Write-Host "Synchronization cancelled by user for $targetVip."
-        continue
+    if (-not $forceSync) {
+        Write-Host "Differences detected for $targetVip. Would you like to synchronize these to the target cluster?"
+        $syncConfirm = Read-Host "Type 'Y' to proceed or anything else to cancel"
+        if ($syncConfirm -ne 'Y') {
+            Write-Host "Synchronization cancelled by user for $targetVip."
+            continue
+        }
+    } else {
+        Write-Host "Differences detected for $targetVip. Forcing synchronization due to -forceSync flag." -ForegroundColor Yellow
     }
 
     foreach ($role in $missingRoles) {
