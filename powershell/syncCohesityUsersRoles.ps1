@@ -55,7 +55,7 @@ if (-not $targetVips) {
 $localDomain = "LOCAL"
 $allowedLocalUser = "adminp2"
 
-. "$PSScriptRoot\cohesity-api-helper.ps1"
+. "$PSScriptRoot\cohesity-api.ps1"
 
 function Build-UserKey($user) {
     return "$($user.domain.ToLower())\$($user.username.ToLower())"
@@ -134,6 +134,20 @@ function Sync-Group($group) {
         Write-Host $_.Exception.Message
     }
 }
+function Remove-User($user) {
+    $userKey = "$($user.domain)\$($user.username)"
+    try {
+        $body = @{
+            domain = $user.domain
+            users  = @($user.username)
+        }
+        api delete /public/users $body
+        Write-Host "Removed user: $userKey" -ForegroundColor Yellow
+    } catch {
+        Write-Host "Failed to remove user: $userKey" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+    }
+}
 
 # --- For each target cluster, compare and sync ---
 foreach ($targetVip in $targetVips) {
@@ -193,7 +207,20 @@ foreach ($targetVip in $targetVips) {
         }
     }
 
-    $hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0 -or $missingGroups.Count -gt 0
+    $sourceUserKeys = @{}
+    foreach ($user in $sourceUsers) { $sourceUserKeys[(Build-UserKey $user)] = $true }
+
+    $usersToRemove = @()
+    foreach ($user in $targetUsers) {
+        $userKey = Build-UserKey $user
+        if (-not $sourceUserKeys.ContainsKey($userKey)) {
+            # Don't remove allowed local user
+            if ($user.domain -eq $localDomain -and $user.username -eq $allowedLocalUser) { continue }
+            $usersToRemove += $user
+        }
+    }
+
+    $hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0 -or $missingGroups.Count -gt 0 -or $usersToRemove.Count -gt 0
 
     if (-not $hasDifferences) {
         Write-Host "Source and target cluster $targetVip are already in sync. No updates needed." -ForegroundColor Green
@@ -225,6 +252,9 @@ foreach ($targetVip in $targetVips) {
     }
     foreach ($group in $missingGroups) {
         Sync-Group $group
+    }
+    foreach ($user in $usersToRemove) {
+        Remove-User $user
     }
 
     # Optionally clear session or disconnect here if your helper supports it
