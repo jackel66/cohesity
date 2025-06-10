@@ -38,8 +38,16 @@ param (
     [string]$sourceVip,
     [string[]]$targetVips,
     [string]$username,
-    [string]$domain = 'domain.com'
+    [string]$domain = 'domain.com',
+    [switch]$forceSync
 )
+
+# --- Local User Parameters ---
+$localDomain = "LOCAL"
+$allowedLocalUser = "adminp2"
+
+# --- Cohesity Api Connect Script ---
+. "$PSScriptRoot\cohesity-api.ps1"
 
 if (-not $targetVips) {
     $filePath = "$PSScriptRoot\targetvips.txt"
@@ -52,11 +60,7 @@ if (-not $targetVips) {
     }
 }
 
-$localDomain = "LOCAL"
-$allowedLocalUser = "adminp2"
-
-. "$PSScriptRoot\cohesity-api.ps1"
-
+# --- Key Builder Functions ---
 function Build-UserKey($user) {
     return "$($user.domain.ToLower())\$($user.username.ToLower())"
 }
@@ -67,17 +71,7 @@ function Build-RoleKey($role) {
     return $role.name
 }
 
-# --- Connect to Source ---
-Write-Host "`nConnecting to source cluster: $sourceVip" -ForegroundColor Cyan
-apiauth -vip $sourceVip -username $username -domain $domain
-$sourceUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
-$sourceGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
-$sourceRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
-
-foreach ($role in $sourceRoles) {
-    $role | Add-Member -MemberType NoteProperty -Name PrivString -Value ((@($role.privileges | Sort-Object -Unique) -join ','))
-}
-
+# --- Sync Functions ---
 function Sync-Role($role, $isNew) {
     $body = @{
         name          = $role.name
@@ -96,7 +90,7 @@ function Sync-Role($role, $isNew) {
         Write-Host $_.Exception.Message
     }
 }
-function Sync-User($user) {
+function Sync-User($user, $isUpdate = $false) {
     $userKey = "$($user.domain)\$($user.username)"
     if ($user.domain -eq $localDomain -and $user.username -ne $allowedLocalUser) {
         Write-Host "Skipping unapproved LOCAL user: $userKey" -ForegroundColor Yellow
@@ -112,11 +106,18 @@ function Sync-User($user) {
         $body["password"] = "TempSecureP@ssw0rd!"
     }
     try {
-        api post /public/users $body
+        if ($isUpdate) {
+            $uri = "/public/users/$($user.domain)/$($user.username)"
+            Write-Host "Updating user: $userKey" -ForegroundColor Cyan
+            api put $uri $body
+        } else {
+            Write-Host "Creating user: $userKey" -ForegroundColor Cyan
+            api post /public/users $body
+        }
         Write-Host "Synced user: $userKey" -ForegroundColor DarkGreen -BackgroundColor Green
     } catch {
         Write-Host "Failed to sync user: $userKey" -ForegroundColor Red
-        Write-Host $_.Exception.Message
+        Write-Host ($_.Exception.Message) -ForegroundColor Yellow
     }
 }
 function Sync-Group($group) {
@@ -134,6 +135,8 @@ function Sync-Group($group) {
         Write-Host $_.Exception.Message
     }
 }
+
+# --- Remove Functions ---
 function Remove-User($user) {
     $userKey = "$($user.domain)\$($user.username)"
     try {
@@ -148,26 +151,38 @@ function Remove-User($user) {
         Write-Host $_.Exception.Message
     }
 }
+function Remove-Role($role) {
+    try {
+        api delete "/public/roles/$($role.name)"
+        Write-Host "Removed custom role: $($role.name)" -ForegroundColor Yellow
+    } catch {
+        Write-Host "Failed to remove role: $($role.name)" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+    }
+}
+function Remove-Group($group) {
+    try {
+        api delete "/public/groups/$($group.domain)/$($group.name)"
+        Write-Host "Removed group: $($group.name)" -ForegroundColor Yellow
+    } catch {
+        Write-Host "Failed to remove group: $($group.name)" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+    }
+}
 
-# --- For each target cluster, compare and sync ---
-foreach ($targetVip in $targetVips) {
-    Write-Host "`nConnecting to target cluster: $targetVip" -ForegroundColor Cyan
-    apiauth -vip $targetVip -username $username -domain $domain
+# --- Comparison Functions ---
+function Compare-ClusterState {
+    param (
+        $sourceRoles, $targetRoles,
+        $sourceUsers, $targetUsers,
+        $sourceGroups, $targetGroups
+    )
 
-    $targetUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
-    $targetGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
-    $targetRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
-
-    $targetUserTable = @{}
-    foreach ($u in $targetUsers) { $targetUserTable[(Build-UserKey $u)] = $u }
-    $targetGroupTable = @{}
-    foreach ($g in $targetGroups) { $targetGroupTable[(Build-GroupKey $g)] = $g }
     $targetRoleTable = @{}
     foreach ($r in $targetRoles) { $targetRoleTable[(Build-RoleKey $r)] = $r }
     foreach ($role in $targetRoles) {
         $role | Add-Member -MemberType NoteProperty -Name PrivString -Value ((@($role.privileges | Sort-Object -Unique) -join ','))
     }
-
     $missingRoles = @()
     $roleDiffs = @()
     foreach ($role in $sourceRoles) {
@@ -180,7 +195,18 @@ foreach ($targetVip in $targetVips) {
             $roleDiffs += $role
         }
     }
+    $sourceRoleKeys = @{}
+    foreach ($role in $sourceRoles) { $sourceRoleKeys[(Build-RoleKey $role)] = $true }
+    $rolesToRemove = @()
+    foreach ($role in $targetRoles) {
+        $roleKey = Build-RoleKey $role
+        if (-not $sourceRoleKeys.ContainsKey($roleKey)) {
+            $rolesToRemove += $role
+        }
+    }
 
+    $targetUserTable = @{}
+    foreach ($u in $targetUsers) { $targetUserTable[(Build-UserKey $u)] = $u }
     $missingUsers = @()
     $roleMismatchedUsers = @()
     foreach ($user in $sourceUsers) {
@@ -197,7 +223,19 @@ foreach ($targetVip in $targetVips) {
             }
         }
     }
+    $sourceUserKeys = @{}
+    foreach ($user in $sourceUsers) { $sourceUserKeys[(Build-UserKey $user)] = $true }
+    $usersToRemove = @()
+    foreach ($user in $targetUsers) {
+        $userKey = Build-UserKey $user
+        if (-not $sourceUserKeys.ContainsKey($userKey)) {
+            if ($user.domain -eq $localDomain -and $user.username -eq $allowedLocalUser) { continue }
+            $usersToRemove += $user
+        }
+    }
 
+    $targetGroupTable = @{}
+    foreach ($g in $targetGroups) { $targetGroupTable[(Build-GroupKey $g)] = $g }
     $missingGroups = @()
     foreach ($group in $sourceGroups) {
         $groupKey = Build-GroupKey $group
@@ -206,61 +244,109 @@ foreach ($targetVip in $targetVips) {
             $missingGroups += $group
         }
     }
-
-    $sourceUserKeys = @{}
-    foreach ($user in $sourceUsers) { $sourceUserKeys[(Build-UserKey $user)] = $true }
-
-    $usersToRemove = @()
-    foreach ($user in $targetUsers) {
-        $userKey = Build-UserKey $user
-        if (-not $sourceUserKeys.ContainsKey($userKey)) {
-            # Don't remove allowed local user
-            if ($user.domain -eq $localDomain -and $user.username -eq $allowedLocalUser) { continue }
-            $usersToRemove += $user
+    $sourceGroupKeys = @{}
+    foreach ($group in $sourceGroups) { $sourceGroupKeys[(Build-GroupKey $group)] = $true }
+    $groupsToRemove = @()
+    foreach ($group in $targetGroups) {
+        $groupKey = Build-GroupKey $group
+        if (-not $sourceGroupKeys.ContainsKey($groupKey)) {
+            $groupsToRemove += $group
         }
     }
 
-    $hasDifferences = $missingRoles.Count -gt 0 -or $roleDiffs.Count -gt 0 -or $missingUsers.Count -gt 0 -or $roleMismatchedUsers.Count -gt 0 -or $missingGroups.Count -gt 0 -or $usersToRemove.Count -gt 0
+    return @{
+        MissingRoles = $missingRoles
+        RoleDiffs = $roleDiffs
+        RolesToRemove = $rolesToRemove
+        MissingUsers = $missingUsers
+        RoleMismatchedUsers = $roleMismatchedUsers
+        UsersToRemove = $usersToRemove
+        MissingGroups = $missingGroups
+        GroupsToRemove = $groupsToRemove
+    }
+}
+
+# --- Per-Cluster Sync Function ---
+function Sync-Cluster {
+    param (
+        [string]$TargetVip
+    )
+
+    Write-Host "`nConnecting to target cluster: $TargetVip" -ForegroundColor Cyan
+    apiauth -vip $TargetVip -username $username -domain $domain
+
+    $targetUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
+    $targetGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
+    $targetRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
+
+    $diffs = Compare-ClusterState -sourceRoles $sourceRoles -targetRoles $targetRoles `
+        -sourceUsers $sourceUsers -targetUsers $targetUsers `
+        -sourceGroups $sourceGroups -targetGroups $targetGroups
+
+    $hasDifferences = $diffs.MissingRoles.Count -gt 0 -or $diffs.RoleDiffs.Count -gt 0 -or `
+        $diffs.MissingUsers.Count -gt 0 -or $diffs.RoleMismatchedUsers.Count -gt 0 -or `
+        $diffs.MissingGroups.Count -gt 0 -or $diffs.UsersToRemove.Count -gt 0 -or `
+        $diffs.RolesToRemove.Count -gt 0 -or $diffs.GroupsToRemove.Count -gt 0
 
     if (-not $hasDifferences) {
-        Write-Host "Source and target cluster $targetVip are already in sync. No updates needed." -ForegroundColor Green
-        continue
+        Write-Host "Source and target cluster $TargetVip are already in sync. No updates needed." -ForegroundColor Green
+        return
     }
 
     if (-not $forceSync) {
-        Write-Host "Differences detected for $targetVip. Would you like to synchronize these to the target cluster?"
+        Write-Host "Differences detected for $TargetVip. Would you like to synchronize these to the target cluster?"
         $syncConfirm = Read-Host "Type 'Y' to proceed or anything else to cancel"
         if ($syncConfirm -ne 'Y') {
-            Write-Host "Synchronization cancelled by user for $targetVip."
-            continue
+            Write-Host "Synchronization cancelled by user for $TargetVip."
+            return
         }
     } else {
-        Write-Host "Differences detected for $targetVip. Forcing synchronization due to -forceSync flag." -ForegroundColor Yellow
+        Write-Host "Differences detected for $TargetVip. Forcing synchronization due to -forceSync flag." -ForegroundColor Yellow
     }
 
-    foreach ($role in $missingRoles) {
+    foreach ($role in $diffs.MissingRoles) {
         Sync-Role $role $true
     }
-    foreach ($role in $roleDiffs) {
+    foreach ($role in $diffs.RoleDiffs) {
         Sync-Role $role $false
     }
-    foreach ($user in $missingUsers) {
-        Sync-User $user
+    foreach ($user in $diffs.MissingUsers) {
+        Sync-User $user $false
     }
-    foreach ($user in $roleMismatchedUsers) {
-        Sync-User $user
+    foreach ($user in $diffs.RoleMismatchedUsers) {
+        Sync-User $user $true
     }
-    foreach ($group in $missingGroups) {
+    foreach ($group in $diffs.MissingGroups) {
         Sync-Group $group
     }
-    foreach ($user in $usersToRemove) {
+    foreach ($user in $diffs.UsersToRemove) {
         Remove-User $user
     }
+    foreach ($role in $diffs.RolesToRemove) {
+        Remove-Role $role
+    }
+    foreach ($group in $diffs.GroupsToRemove) {
+        Remove-Group $group
+    }
 
-    # Optionally clear session or disconnect here if your helper supports it
     if (Get-Command -Name apidrop -ErrorAction SilentlyContinue) {
         apidrop
     }
 
-    Write-Host "Synchronization complete for $targetVip." -ForegroundColor DarkGreen -BackgroundColor Green
+    Write-Host "Synchronization complete for $TargetVip." -ForegroundColor DarkGreen -BackgroundColor Green
+}
+
+# --- Connect to Source Cluster and Gather Data ---
+Write-Host "`nConnecting to source cluster: $sourceVip" -ForegroundColor Cyan
+apiauth -vip $sourceVip -username $username -domain $domain
+$sourceUsers = api get /public/users | Where-Object { $_.domain -ne $localDomain -or $_.username -eq $allowedLocalUser }
+$sourceGroups = api get /public/groups | Where-Object { $_.domain -ne $localDomain }
+$sourceRoles = api get /public/roles | Where-Object { $_.isCustomRole -eq $true }
+foreach ($role in $sourceRoles) {
+    $role | Add-Member -MemberType NoteProperty -Name PrivString -Value ((@($role.privileges | Sort-Object -Unique) -join ','))
+}
+
+# --- Main Loop ---
+foreach ($targetVip in $targetVips) {
+    Sync-Cluster -TargetVip $targetVip
 }

@@ -113,6 +113,21 @@ foreach ($targetVip in $targetVips) {
             description                 = $view.description
             enableFastDurableHandle     = $view.enableFastDurableHandle
             viewBoxId                   = $targetViewBoxId
+            viewlock                    = $view.viewLockEnabled
+            filelockconfig              = $view.fileLockConfig
+            subnetWhitelist             = $view.subnetWhitelist
+            qos                         = $view.qos
+            s3FolderSupport             = $view.s3FolderSupportEnabled
+            protocolAccess              = $view.protocolAccess
+            viewProtocol                = $view.viewProtocol
+            fileExtensionFilter         = $view.fileExtensionFilter
+            enableFilerAuditLogging     = $view.enableFilerAuditLogging
+            enableMixedModePermissions  = $view.enableMixedModePermissions
+            enableNfsViewDiscovery      = $view.enableNfsViewDiscovery
+            overrideGlobalWhitelist     = $view.overrideGlobalWhitelist
+            overrideGlobalNetgroupWhitelist = $view.overrideGlobalNetgroupWhitelist
+            enableSmbOplock             = $view.enableSmbOplock
+            viewPinningConfig           = $view.viewPinningConfig
             # Add any other properties you want to preserve
         }
 
