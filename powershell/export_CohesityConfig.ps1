@@ -73,6 +73,7 @@ function Write-JsonFile {
 
 # --- Function to export Cohesity configuration data ---
 function Export-CohesityConfig {
+    [CmdletBinding()]
     param (
         [string]$clusterVip,
         [string]$targetPath,
@@ -80,102 +81,47 @@ function Export-CohesityConfig {
         [string]$domain
     )
 
-    # --- Authenticate to Cohesity cluster --- 
-    apiauth -vip $clusterVip -Username $username -Domain $domain
+    try {
+        apiauth -vip $clusterVip -Username $username -Domain $domain
 
-    # --- Get cluster name and summary ---
-    $clusterInfo = api get /public/cluster
-    $clusterName = $clusterInfo.name -replace '[^a-zA-Z0-9_-]', '_' # Sanitize for file name
+        $clusterInfo = api get /public/cluster
+        $clusterName = $clusterInfo.name -replace '[^a-zA-Z0-9_-]', '_'
 
-    # --- Remove zip files older than 30 days in the target directory for this cluster ---
-    $zipPattern = "$clusterName-configs-*.zip"
-    Get-ChildItem -Path $targetPath -Filter $zipPattern | Where-Object {
-        $_.LastWriteTime -lt (Get-Date).AddDays(-30)
-    } | ForEach-Object {
-        Write-Host "Removing old backup: $($_.FullName)"
-        Remove-Item $_.FullName
-    }
-    # --- Initialize variables for API calls ---
-    if ($null -eq $protectionJobs -or $protectionJobs.Count -eq 0) { $protectionJobs = @() }
-    if ($null -eq $sources -or $sources.Count -eq 0) { $sources = @() }
-    if ($null -eq $protectionPolicies  -or $protectionPolicies.Count -eq 0) { $protectionPolicies = @() }
-    if ($null -eq $users) { $users = @() }
-    if ($null -eq $roles) { $roles = @() }
-    if ($null -eq $groups) { $groups = @() }
-    if ($null -eq $route) { $route = @() }
-    if ($null -eq $nodes) { $nodes = @() }
-    if ($null -eq $gflags) { $gflags = @() }
-    if ($null -eq $views) { $views = @() }
-    if ($null -eq $security) { $security = @() }
-    if ($null -eq $clusterInfo) { $clusterInfo = @{} }
+        $date = Get-Date -Format "yyyy-MM-dd"
+        $zipBaseName = "$clusterName-configs-$date.zip"
+        $zipPath = Join-Path $targetPath $zipBaseName
 
-    # --- Get protection jobs, sources, and policies ---
-    $protectionJobs = api get /public/protectionJobs
-    $sources = api get /public/protectionSources
-    $protectionPolicies = api get /public/protectionPolicies
-    $users = api get /public/users
-    $roles = api get /public/roles
-    $groups = api get /public/groups
-    $route = api get /public/routes
-    $nodes = api get cluster/nodes -v2
-    $gflags = (api get /nexus/clustr/list_gflags).serviceGflags
-    $security = api get security-config -v2
-    $views = api get /public/views
-    
-    # --- Prepare output directory and filenames ---
-    $date = Get-Date -Format "yyyy-MM-dd"
-    $zipBaseName = "$clusterName-configs-$date.zip"
-    $zipPath = Join-Path $targetPath $zipBaseName
-
-    $jobsJson = Join-Path $targetPath "$clusterName-protectionJobs.json"
-    $sourcesJson = Join-Path $targetPath "$clusterName-protectionSources.json"
-    $policiesJson = Join-Path $targetPath "$clusterName-protectionPolicies.json"
-    $usersJson = Join-Path $targetPath "$clusterName-users.json"
-    $rolesJson = Join-Path $targetPath "$clusterName-roles.json"
-    $clusterSummaryJson = Join-Path $targetPath "$clusterName-clusterSummary.json"
-    $groupsJson = Join-Path $targetPath "$clustername-groups.json"
-    $nodesJson = Join-Path $targetPath "$clusterName-nodes.json"
-    $routeJson = Join-Path $targetPath "$clusterName-customRoutes.json"
-    $gflagsJson = Join-Path $targetPath "$clustername-gflags.json"
-    $securityJson = Join-Path $targetPath "$clusterName-security-config.json"
-    $viewsJson = Join-Path $targetPath "$clusterName-views.json"
-
-    # --- Handle existing zip file ---
-    $counter = 1
-    while (Test-Path $zipPath) {
-        $choice = Read-Host "File '$zipBaseName' already exists. Overwrite (Y) or create new with (N)? [Y/N]"
-        if ($choice -eq "Y" -or $choice -eq "y") {
-            Remove-Item $zipPath
-            break
-        } else {
-            $zipBaseName = "$clusterName-configs-$date($counter).zip"
-            $zipPath = Join-Path $targetPath $zipBaseName
-            $counter++
+        $exportItems = @{
+            protectionJobs   = "/public/protectionJobs"
+            protectionSources= "/public/protectionSources"
+            protectionPolicies= "/public/protectionPolicies"
+            users           = "/public/users"
+            roles           = "/public/roles"
+            groups          = "/public/groups"
+            routes          = "/public/routes"
+            nodes           = "cluster/nodes -v2"
+            gflags          = "/nexus/clustr/list_gflags"
+            security        = "security-config -v2"
+            views           = "/public/views"
+            clusterSummary  = "/public/cluster"
         }
+
+        $jsonFiles = @()
+        foreach ($item in $exportItems.GetEnumerator()) {
+            $apiPath = $item.Value
+            $data = api get $apiPath
+            $jsonFile = Join-Path $targetPath "$clusterName-$($item.Key).json"
+            Write-JsonFile -Path $jsonFile -Object $data
+            $jsonFiles += $jsonFile
+        }
+
+        Compress-Archive -Path $jsonFiles -DestinationPath $zipPath -Force
+        Remove-Item $jsonFiles -Force
+
+        Write-Verbose "Export complete for $clusterVip. Output: $zipPath"
+    } catch {
+        Write-Error "Failed to export config for $clusterVip: $_"
     }
-
-# --- Export data to JSON files ---
-    Write-JsonFile -Path $jobsJson -Object $protectionJobs
-    Write-JsonFile -Path $sourcesJson -Object $sources
-    Write-JsonFile -Path $policiesJson -Object $protectionPolicies
-    Write-JsonFile -Path $usersJson -Object $users
-    Write-JsonFile -Path $rolesJson -Object $roles
-    Write-JsonFile -Path $groupsJson -Object $groups
-    Write-JsonFile -Path $routeJson -Object $route
-    Write-JsonFile -Path $nodesJson -Object $nodes
-    Write-JsonFile -Path $clusterSummaryJson -Object $clusterInfo
-    Write-JsonFile -Path $gflagsJson -Object $gflags
-    Write-JsonFile -Path $securityJson -Object $security
-    Write-JsonFile -Path $viewsJson -Object $views
- 
-
-    # --- Zip the JSON files ---
-    Compress-Archive -Path $jobsJson, $sourcesJson, $policiesJson, $usersJson, $rolesJson, $groupsJson, $routeJson, $nodesJson, $clusterSummaryJson, $securityJson, $viewsJson, $gflagsJson -DestinationPath $zipPath
-
-    # --- Clean up JSON files ---
-    Remove-Item $jobsJson, $sourcesJson, $policiesJson, $usersJson, $rolesJson, $groupsJson, $routeJson, $nodesJson, $clusterSummaryJson, $securityJson, $viewsJson, $gflagsJson
-
-    Write-Host "Export complete for $clusterVip. Output: $zipPath"
 }
 
 # --- Main logic: handle single cluster or file with multiple clusters --- 
