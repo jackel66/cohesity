@@ -4,8 +4,8 @@
 import subprocess
 import os
 
-IRIS_USERNAME = "admin2"
-IRIS_PASSWORD = "P^({XzR!*=Kr0110}"
+IRIS_USERNAME = "<username>"
+IRIS_PASSWORD = "<password>"
 
 def set_environment_variables():
     username = os.environ.get('IRIS_USERNAME')

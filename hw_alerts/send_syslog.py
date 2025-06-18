@@ -10,7 +10,7 @@ import socket
 import logger_config
 
 # Syslog Server and Port information
-syslog_host = 'syslogvip.capgroup.com'  # <<< Change to syslog server name
+syslog_host = '<Syslog VIP>'  # <<< Change to syslog server name
 syslog_port = 514                       # <<< Change to syslog server port
 
 # Get Cluster name from alerting system
