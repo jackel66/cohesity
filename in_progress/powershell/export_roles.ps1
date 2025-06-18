@@ -82,8 +82,8 @@ apiauth -vip $vip -username $user -domain $domain
 # Export Roles
 $roles = api get /public/roles
 
-# Save JSON
-$exportFile = "$($vip).roles_export.json"
-$roles | ConvertTo-Json -Depth 10 | Out-File -FilePath $exportFile -Encoding utf8
-
-Write-Host "✅ Exported $($roles.Count) roles to $exportFile"
+# Check for roles export success
+if ($roles) {
+    # Save JSON
+    $exportFile = "$($vip).roles_export.json"
+    $roles | ConvertTo-Json -Depth 10 | Out-File -FilePath $exportFile -Encoding utf8

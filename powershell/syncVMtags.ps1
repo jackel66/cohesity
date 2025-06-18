@@ -49,16 +49,16 @@ if ($Export) {
     $cat = Get-TagCategory -Name $Category -ErrorAction Stop
     $tags = Get-Tag -Category $cat
 
-    $export = @()
+    $exportTags = @()
     foreach ($tag in $tags) {
-        $export += [PSCustomObject]@{
+        $exportTags += [PSCustomObject]@{
             Name        = $tag.Name
             Description = $tag.Description
             Category    = $tag.Category.Name
         }
     }
-    $export | ConvertTo-Json | Set-Content $File
-    Write-Host "Exported $($export.Count) tags from category '$Category' to $File" -ForegroundColor Green
+    $exportTags | ConvertTo-Json | Set-Content $File
+    Write-Host "Exported $($exportTags.Count) tags from category '$Category' to $File" -ForegroundColor Green
     Disconnect-VIServer -Server $SourceServer -Confirm:$false
     exit 0
 }
