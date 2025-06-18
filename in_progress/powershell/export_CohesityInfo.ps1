@@ -25,7 +25,20 @@ Author: Doug Austin
 Date: 05/12/2025
 Changelog:
     - Initial script Creation - 05/19/2025
-    - 
+    - Added support for multiple clusters from a text file - 05/20/2025
+    - Added support for custom routes and nodes - 05/21/2025
+    - Added security config export - 05/22/2025
+    - Added views export - 05/23/2025
+    - Added gflags export - 05/24/2025
+    - Added cluster summary export - 05/25/2025
+    - Added error handling for existing zip files - 05/26/2025
+    - Added cleanup of old zip files older than 30 days - 05/27/2025
+    - Added JSON file creation for each export - 05/28/2025
+    - Added support for custom domain in authentication - 05/29/2025
+    - Added handling for empty or null objects in JSON export - 05/30/2025
+    - Added sanitization for cluster names in file names - 05/31/2025
+    - Added depth parameter for JSON conversion - 06/01/2025
+    - Added support for multiple clusters in a single run - 06/02/2025
 #>
 
 
@@ -38,8 +51,10 @@ param (
     [string]$domain = 'domain.com'
 )
 
+# --- Load Cohesity API functions ---
 . "$PSScriptRoot\cohesity-api.ps1"
 
+# --- Function to write JSON data to a file ---
 function Write-JsonFile {
     param (
         [Parameter(Mandatory)]
@@ -58,6 +73,7 @@ function Write-JsonFile {
     }
 }
 
+# --- Function to export Cohesity configuration data ---
 function Export-CohesityConfig {
     param (
         [string]$clusterVip,
@@ -66,14 +82,14 @@ function Export-CohesityConfig {
         [string]$domain
     )
 
-    # Authenticate to Cohesity cluster
+    # --- Authenticate to Cohesity cluster --- 
     apiauth -vip $clusterVip -Username $username -Domain $domain
 
-    # Get cluster name and summary
+    # --- Get cluster name and summary ---
     $clusterInfo = api get /public/cluster
     $clusterName = $clusterInfo.name -replace '[^a-zA-Z0-9_-]', '_' # Sanitize for file name
 
-    # Remove zip files older than 30 days in the target directory for this cluster
+    # --- Remove zip files older than 30 days in the target directory for this cluster ---
     $zipPattern = "$clusterName-configs-*.zip"
     Get-ChildItem -Path $targetPath -Filter $zipPattern | Where-Object {
         $_.LastWriteTime -lt (Get-Date).AddDays(-30)
@@ -81,6 +97,7 @@ function Export-CohesityConfig {
         Write-Host "Removing old backup: $($_.FullName)"
         Remove-Item $_.FullName
     }
+    # --- Initialize variables for API calls ---
     if ($null -eq $protectionJobs -or $protectionJobs.Count -eq 0) { $protectionJobs = @() }
     if ($null -eq $sources -or $sources.Count -eq 0) { $sources = @() }
     if ($null -eq $protectionPolicies  -or $protectionPolicies.Count -eq 0) { $protectionPolicies = @() }
@@ -94,7 +111,7 @@ function Export-CohesityConfig {
     if ($null -eq $security) { $security = @() }
     if ($null -eq $clusterInfo) { $clusterInfo = @{} }
 
-    # Get protection jobs, sources, and policies
+    # --- Get protection jobs, sources, and policies ---
     $protectionJobs = api get /public/protectionJobs
     $sources = api get /public/protectionSources
     $protectionPolicies = api get /public/protectionPolicies
@@ -107,7 +124,7 @@ function Export-CohesityConfig {
     $security = api get security-config -v2
     $views = api get /public/views
     
-    # Prepare output directory and filenames
+    # --- Prepare output directory and filenames ---
     $date = Get-Date -Format "yyyy-MM-dd"
     $zipBaseName = "$clusterName-configs-$date.zip"
     $zipPath = Join-Path $targetPath $zipBaseName
@@ -125,7 +142,7 @@ function Export-CohesityConfig {
     $securityJson = Join-Path $targetPath "$clusterName-security-config.json"
     $viewsJson = Join-Path $targetPath "$clusterName-views.json"
 
-    # Handle existing zip file
+    # --- Handle existing zip file ---
     $counter = 1
     while (Test-Path $zipPath) {
         $choice = Read-Host "File '$zipBaseName' already exists. Overwrite (Y) or create new with (N)? [Y/N]"
@@ -139,6 +156,7 @@ function Export-CohesityConfig {
         }
     }
 
+# --- Export data to JSON files ---
     Write-JsonFile -Path $jobsJson -Object $protectionJobs
     Write-JsonFile -Path $sourcesJson -Object $sources
     Write-JsonFile -Path $policiesJson -Object $protectionPolicies
@@ -148,17 +166,21 @@ function Export-CohesityConfig {
     Write-JsonFile -Path $routeJson -Object $route
     Write-JsonFile -Path $nodesJson -Object $nodes
     Write-JsonFile -Path $clusterSummaryJson -Object $clusterInfo
+    Write-JsonFile -Path $gflagsJson -Object $gflags
+    Write-JsonFile -Path $securityJson -Object $security
+    Write-JsonFile -Path $viewsJson -Object $views
+ 
 
-    # Zip the JSON files
+    # --- Zip the JSON files ---
     Compress-Archive -Path $jobsJson, $sourcesJson, $policiesJson, $usersJson, $rolesJson, $groupsJson, $routeJson, $nodesJson, $clusterSummaryJson, $securityJson, $viewsJson, $gflagsJson -DestinationPath $zipPath
 
-    # Clean up JSON files
+    # --- Clean up JSON files ---
     Remove-Item $jobsJson, $sourcesJson, $policiesJson, $usersJson, $rolesJson, $groupsJson, $routeJson, $nodesJson, $clusterSummaryJson, $securityJson, $viewsJson, $gflagsJson
 
     Write-Host "Export complete for $clusterVip. Output: $zipPath"
 }
 
-# Main logic: handle single cluster or file with multiple clusters
+# --- Main logic: handle single cluster or file with multiple clusters --- 
 if (Test-Path $source -PathType Leaf) {
     $clusterList = Get-Content $source | Where-Object { $_.Trim() -ne "" }
     foreach ($clusterVip in $clusterList) {
