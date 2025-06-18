@@ -1,7 +1,7 @@
 param (
     [string]$source,
     [string]$username,
-    [string]$domain = 'cguser.capgroup.com'
+    [string]$domain = 'domain'
 )
 
 . "$PSScriptRoot\cohesity-api.ps1"

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# Description: This script checks the memory usage of the Magneto process.
+# Author : Doug Austin
+# Date : 2023-10-04
+# Usage: ./magneto_mem_check.py
+
+
+#-- Needed Libraries ---
 import subprocess
 import os
 
