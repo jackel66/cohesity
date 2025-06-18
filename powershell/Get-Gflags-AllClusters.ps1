@@ -1,8 +1,8 @@
 Clear-Host
-$user = "condoua2a"                                     # Insert your user account here
-$domain = "cguser.capgroup.com"                         # Domain should be AD
-$serverList = Get-Content "Z:\Cohesity\Scripts\Doug\servers.txt" # File Containing all Clusters
-$gflagscript = "Z:\Cohesity\Scripts\Doug\Cohesity\gflags.ps1"             # Call to Get Gflag Script
+$user = "username"                                     # Insert your user account here
+$domain = "domain"                         # Domain should be AD
+$serverList = Get-Content "<path to file>\servers.txt" # File Containing all Clusters
+$gflagscript = "<path to file>\gflags.ps1"             # Call to Get Gflag Script
 
 
 ### Script Begin - DO NOT EDIT ###

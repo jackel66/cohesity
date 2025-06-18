@@ -2,8 +2,8 @@
 [CmdletBinding()]
 param (
     [Parameter()][string]$vip='helios.cohesity.com',   # the cluster to connect to (DNS name or IP)
-    [Parameter()][string]$username='condoua2a',           # username (local or AD)
-    [Parameter()][string]$domain = 'cguser.capgroup.com',            # domain (local or AD FQDN)
+    [Parameter()][string]$username='username',           # username (local or AD)
+    [Parameter()][string]$domain = 'domain',            # domain (local or AD FQDN)
     [Parameter()][string]$password,                    # optional password
     [Parameter()][switch]$useApiKey,                   # use API key for authentication
     [Parameter()][string]$accessCluster,               # access cluster (if connectig to helios)

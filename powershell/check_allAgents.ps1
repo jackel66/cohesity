@@ -2,7 +2,7 @@ Clear-Host
 $user = "userrname"                                     # Insert your user account here
 $domain = "local"                         # Domain should be AD
 $serverList = Get-Content "File Path for Cohesity Clusters" # File Containing all Clusters
-$gflagscript = "Path to agent Scrip \ agentVersions.ps1"             # Call to Get Gflag Script
+$gflagscript = "Path to agent Script \ agentVersions.ps1"             # Call to Get Gflag Script
 
 
 ### Script Begin - DO NOT EDIT ###

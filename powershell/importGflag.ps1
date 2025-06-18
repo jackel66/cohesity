@@ -1,6 +1,6 @@
 Clear-Host
 $user = "username"                                     # Insert your user account here
-$domain = "cgulocal"                         # Domain should be AD
+$domain = "LOCAL"                         # Domain should be AD
 $serverList = Get-Content "servers_colo.txt" # File Containing all Cluster names
 $gflagimport = "importgflags.csv"             # Call to Get Gflag csv where the flags are set
 $gflagimportscript = "gflags.ps1"             # Call the Gflag update script to execute
