@@ -11,7 +11,7 @@ $domain = 'local' # domain of user account
 apiauth -vip $vip -username $username -domain $domain
 
 # Read exported Routes
-$routes = Get-Content -Raw -Path 'asx1bkascl-az.static_routes_export.json' | ConvertFrom-Json 
+$routes = Get-Content -Raw -Path "$vip.static_routes_export.json" | ConvertFrom-Json 
 
 foreach ($route in $routes) {
     #remove readonly fields
