@@ -17,9 +17,6 @@ Cohesity authentication domain.
 .PARAMETER targetPath (Optional)
 (Optional) The target location for the exports Default is Local Directory
 
-.EXAMPLE
-
-
 .NOTES
 Author: Doug Austin
 Date: 05/12/2025
@@ -75,12 +72,14 @@ function Write-JsonFile {
 
 # --- Function to export Cohesity configuration data ---
 function Export-CohesityConfig {
+    [CmdletBinding()]
     param (
         [string]$clusterVip,
         [string]$targetPath,
         [string]$username,
         [string]$domain
     )
+
 
     # --- Authenticate to Cohesity cluster --- 
     apiauth -vip $clusterVip -Username $username -Domain $domain

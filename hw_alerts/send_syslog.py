@@ -10,8 +10,10 @@ import socket
 import logger_config
 
 # Syslog Server and Port information
+
 syslog_host = '<VIP for Syslog instance>'  # <<< Change to syslog server name
 syslog_port = <port>                       # <<< Change to syslog server port
+
 
 # Get Cluster name from alerting system
 hostname = socket.gethostname()
