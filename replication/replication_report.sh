@@ -15,7 +15,6 @@ print_separator() {
     echo "=================================================================="
 }
  
-# Function to print section header
 print_header() {
     echo ""
     print_separator
@@ -23,19 +22,17 @@ print_header() {
     print_separator
 }
  
-# Get overall statistics (count unique Task UIDs only from SubTasks section)
+# Get overall statistics
 total_running=$(awk '/Replication SubTasks/,/Replication Tasks/ {if(/kAccepted/) print $5}' /tmp/replicaitons.txt | sort | uniq | wc -l)
 total_queued=$(awk '/Replication SubTasks/,/Replication Tasks/ {if(/kStarted/) print $5}' /tmp/replicaitons.txt | sort | uniq | wc -l)
- 
-# Get all unique target clusters
 targets=$(awk '/Target Cluster Name/{getline; while(getline && $0 !~ /^$/ && $0 !~ /References/) print $2}' /tmp/replicaitons.txt | sort | uniq)
  
-# Initialize log file with header if it doesn't exist
+# Initialize log file
 if [[ ! -f "$LOG_FILE" ]]; then
     echo "Date|Target|Running|Queued|Running Age|Oldest_Queued" > "$LOG_FILE"
 fi
  
-# Get current timestamp for logging
+# timestamp for log entries
 current_timestamp=$(date '+%Y-%m-%d %H:%M:%S')
  
 print_header "COHESITY REPLICATION DASHBOARD - $(date '+%Y-%m-%d %H:%M:%S')"
